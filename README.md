@@ -17,4 +17,5 @@ replace 192.168.0.131 with your local ip address
 - fastapi (pip install fastapi)
 - pytorch (https://pytorch.org/get-started/locally/)
 - if you do not know what CUDA version your GPU is running, type nvidia-smi at cmd. 
+- please note that Pytorch does not support newer version of Python. I am using Python 3.8 for this runesolver. 
 - 

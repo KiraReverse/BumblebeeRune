@@ -1,3 +1,4 @@
 
 *.pyc
 __pycache__/
+yolov4-mish-416_last.weights

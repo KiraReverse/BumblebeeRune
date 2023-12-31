@@ -9,9 +9,9 @@ BumblebeeRune
 - please note that this model cannot solve weird arrows. 
 
 # To start, type:
-uvicorn pytorch_solver:app --host 192.168.0.131 --port 8001
+uvicorn pytorch_solver:app --host 192.168.0.130 --port 8001
 
-replace 192.168.0.131 with your local ip address
+replace 192.168.0.130 with your local ip address
 
 # install the following:
 - fastapi (pip install fastapi)

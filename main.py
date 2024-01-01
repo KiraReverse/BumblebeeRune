@@ -1,73 +1,138 @@
+import tkinter as tk
+from tkinter import ttk
+import subprocess
+import threading
+import queue
+import select
+import signal
+import os
 import asyncio
 import sys
 import asyncio.subprocess
+from concurrent.futures import ThreadPoolExecutor
+from PIL import Image, ImageTk   
 
-async def run_uvicorn():
-    # Replace 'your_fastapi_module:app' with the actual module and app instance you want to run
-    # command = 'uvicorn pytorch_solver:app --host 192.168.0.130 --port 8001'
-    command = [
-        sys.executable,  # Path to the Python interpreter
-        '-m', 'uvicorn',
-        'pytorch_solver:app',
-        '--host', '192.168.0.130',  # Adjust the host and port as needed
-        '--port', '8001',
-        # '--reload',  # Enable auto-reload for development
-    ]
+class UVicornApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Runesolver")
+        photo=ImageTk.PhotoImage(file='icon.ico')
+        root.iconphoto(False,photo)
+        self.log_text = tk.Text(root, wrap=tk.WORD, width=90, height=20)
+        self.log_text.grid(row=0, column=0, sticky="nsew")  # Expand in all directions
+        self.log_text.config(state=tk.DISABLED)
+        scrollbar = tk.Scrollbar(root, command=self.log_text.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.log_text.config(yscrollcommand=scrollbar.set)
+        root.grid_rowconfigure(0, weight=1)
+        root.grid_columnconfigure(0, weight=1)
+        self.start_button = ttk.Button(root, text="Start Runesolver", command=self.start_async_task)
+        # self.start_button.pack(pady=10)
+        self.start_button.grid(row=1,column=0,pady=10)
+        self.stop_button = tk.Button(root, text="Stop", command=self.stop_async_task)
+        # self.stop_button.pack(pady=10)
+        self.stop_button.grid(row=2,column=0,pady=10)
+        self.root.protocol("WM_DELETE_WINDOW", self.stop_uvicorn_server)        
+        self.output_queue = queue.Queue()
+        self.loop = asyncio.new_event_loop()
+        # self.executor = ThreadPoolExecutor(max_workers=1)
+        self.task = None
+        self.process_run_uvicorn = None
+        self.show = False
+        # self.blacklist = [b'conv', b'route', b'upsample', b'max', b'detection', b'shortcut', b'layer']
+        self.blacklist = [b'com']
+        
+        # self.task = asyncio.run_coroutine_threadsafe(self.async_task(), self.loop)
 
-    process = await asyncio.create_subprocess_exec(
-        *command,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    def start_async_task(self):
+        self.task = asyncio.run_coroutine_threadsafe(self.async_task(), self.loop)
+
+    def stop_async_task(self):
+        self.show=False
+        if self.task:
+            self.task.cancel()
+        if self.process_run_uvicorn is not None:
+            if self.process_run_uvicorn.returncode is None:
+                self.process_run_uvicorn.terminate()
+
+    async def async_task(self):
+        try:
+            uvicorn_task = asyncio.create_task(self.run_uvicorn())
+            await uvicorn_task
+            # await asyncio.sleep(20)
+            self.update_label_text("Runesolver started. ")
+            return "Async task"
+        except asyncio.CancelledError:
+            self.update_label_text("Runesolver stopped. \n")
+            print(f'cancel .. Runesolver stopped. ')
+
+    def update_label_text(self, line):
+        self.log_text.config(state=tk.NORMAL)
+        self.log_text.insert(tk.END, line)
+        self.log_text.config(state=tk.DISABLED)
+        self.log_text.yview(tk.END)
     
-    async def read_stream(stream, name):
-        while True:
-            line = await stream.readline()
-            if not line:
-                break
-            print(f"{name}: {line.strip()}")
-    
-    # Start tasks to read stdout and stderr concurrently
-    stdout_task = asyncio.create_task(read_stream(process.stdout, 'stdout'))
-    stderr_task = asyncio.create_task(read_stream(process.stderr, 'stderr'))
+    def stop_uvicorn_server(self):
+        print(f'close button pressed')
+        self.show=False
+        if self.task:
+            self.task.cancel()
+        if self.process_run_uvicorn is not None:
+            if self.process_run_uvicorn.returncode is None:
+                self.process_run_uvicorn.terminate()
+        self.root.destroy()    
+            
+    async def run_uvicorn(self):
+        # command = 'uvicorn pytorch_solver:app --host 192.168.0.130 --port 8001'
+        command = [
+            sys.executable,  # Path to the Python interpreter
+            '-m', 'uvicorn',
+            'pytorch_solver:app',
+            '--host', '192.168.0.130',  # Adjust the host and port as needed
+            '--port', '8001',
+        ]
 
+        self.process_run_uvicorn = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        
+        self.update_label_text(f"Welcome to BumbleBee Runesolver .. \n")
+        self.update_label_text(f"Loading model .. This may take up to 10 seconds.  \n")
+        
+        async def read_stream(stream, name):
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+                if self.show:
+                    # if b'conv' in line.strip():
+                    if any(x in line.strip() for x in self.blacklist):
+                        pass
+                    else:
+                        # print(f"{line.strip()}")
+                        self.update_label_text(f"{line.strip()}\n")
+                if name == 'stderr':
+                    if b'Uvicorn running' in line.strip():
+                        self.show=True
+                        self.update_label_text(f"Finished loading .. \n")
+                        self.update_label_text(f"Bumblebee Runesolver successfully launched .. \n")
+        
+        stdout_task = asyncio.create_task(read_stream(self.process_run_uvicorn.stdout, 'stdout'))
+        stderr_task = asyncio.create_task(read_stream(self.process_run_uvicorn.stderr, 'stderr'))
+        await self.process_run_uvicorn.wait()        
+        await asyncio.gather(stdout_task, stderr_task)
 
-    # # Read output asynchronously
-    # while True:
-    #     try:
-    #         stdout_data = await asyncio.wait_for(process.stdout.readline(), timeout=1.0)
-    #         stderr_data = await asyncio.wait_for(process.stderr.readline(), timeout=1.0)
-
-    #         if not stdout_data and not stderr_data:
-    #             break
-
-    #         if stdout_data:
-    #             print(f"stdout: {stdout_data.decode().strip()}")
-    #         if stderr_data:
-    #             print(f"stderr: {stderr_data.decode().strip()}")
-    #     except asyncio.TimeoutError:
-    #         print(f'timeout error. ')
-    #         pass
-
-
-    # Wait for the process to complete
-    print(f'does this loop forever?')
-    await process.wait()
-    print(f'does this loop forever2?')
-    
-
-    # Wait for the reading tasks to complete
-    await asyncio.gather(stdout_task, stderr_task)
+    def run_event_loop(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
 
 async def main():
-    # Run uvicorn in the background
-    uvicorn_task = asyncio.create_task(run_uvicorn())
-
-    # Continue with other asynchronous tasks if needed
-
-    # Wait for uvicorn to complete (you can set a timeout if desired)
-    await uvicorn_task
-    print(f'uvicorn task finished. ')
+    root = tk.Tk()
+    app = UVicornApp(root)
+    threading.Thread(target=app.run_event_loop, daemon=True).start()
+    root.mainloop()
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,138 +1,146 @@
 import tkinter as tk
-from tkinter import ttk
 import subprocess
 import threading
 import queue
-import select
+import msvcrt
+from PIL import Image, ImageTk
 import signal
 import os
-import asyncio
-import sys
-import asyncio.subprocess
-from concurrent.futures import ThreadPoolExecutor
-from PIL import Image, ImageTk   
+import psutil
 
-class UVicornApp:
+class PollingThread(threading.Thread):
+    def __init__(self, target, args=()):
+        super().__init__(target=target, args=args)
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
+
+class PingApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Runesolver")
+        self.root.title("Bumblebee Runesolver")
+        
         photo=ImageTk.PhotoImage(file='icon.ico')
         root.iconphoto(False,photo)
-        self.log_text = tk.Text(root, wrap=tk.WORD, width=90, height=20)
-        self.log_text.grid(row=0, column=0, sticky="nsew")  # Expand in all directions
-        self.log_text.config(state=tk.DISABLED)
-        scrollbar = tk.Scrollbar(root, command=self.log_text.yview)
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        self.log_text.config(yscrollcommand=scrollbar.set)
-        root.grid_rowconfigure(0, weight=1)
-        root.grid_columnconfigure(0, weight=1)
-        self.start_button = ttk.Button(root, text="Start Runesolver", command=self.start_async_task)
-        # self.start_button.pack(pady=10)
-        self.start_button.grid(row=1,column=0,pady=10)
-        self.stop_button = tk.Button(root, text="Stop", command=self.stop_async_task)
-        # self.stop_button.pack(pady=10)
-        self.stop_button.grid(row=2,column=0,pady=10)
-        self.root.protocol("WM_DELETE_WINDOW", self.stop_uvicorn_server)        
-        self.output_queue = queue.Queue()
-        self.loop = asyncio.new_event_loop()
-        # self.executor = ThreadPoolExecutor(max_workers=1)
-        self.task = None
-        self.process_run_uvicorn = None
-        self.show = False
-        # self.blacklist = [b'conv', b'route', b'upsample', b'max', b'detection', b'shortcut', b'layer']
-        self.blacklist = [b'com']
-        
-        # self.task = asyncio.run_coroutine_threadsafe(self.async_task(), self.loop)
 
-    def start_async_task(self):
-        self.task = asyncio.run_coroutine_threadsafe(self.async_task(), self.loop)
+        self.ping_process = None
+        self.is_ping_running = False
+        self.polling_thread = None
+        self.queue = queue.Queue()
 
-    def stop_async_task(self):
-        self.show=False
-        if self.task:
-            self.task.cancel()
-        if self.process_run_uvicorn is not None:
-            if self.process_run_uvicorn.returncode is None:
-                self.process_run_uvicorn.terminate()
+        # Create a single button
+        self.toggle_button = tk.Button(root, text="Start", command=self.toggle_ping,
+                                       bg="#8aff8a", width=12, height=3)
+        self.toggle_button.pack(pady=20, padx=10)
 
-    async def async_task(self):
-        try:
-            uvicorn_task = asyncio.create_task(self.run_uvicorn())
-            await uvicorn_task
-            # await asyncio.sleep(20)
-            self.update_label_text("Runesolver started. ")
-            return "Async task"
-        except asyncio.CancelledError:
-            self.update_label_text("Runesolver stopped. \n")
-            print(f'cancel .. Runesolver stopped. ')
+        # Create a text widget with a scroll bar
+        self.text_widget = tk.Text(root, height=25, width=160, state=tk.DISABLED)
+        self.text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    def update_label_text(self, line):
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.insert(tk.END, line)
-        self.log_text.config(state=tk.DISABLED)
-        self.log_text.yview(tk.END)
-    
-    def stop_uvicorn_server(self):
-        print(f'close button pressed')
-        self.show=False
-        if self.task:
-            self.task.cancel()
-        if self.process_run_uvicorn is not None:
-            if self.process_run_uvicorn.returncode is None:
-                self.process_run_uvicorn.terminate()
-        self.root.destroy()    
-            
-    async def run_uvicorn(self):
-        # command = 'uvicorn pytorch_solver:app --host 192.168.0.130 --port 8001'
+        self.scrollbar = tk.Scrollbar(root, command=self.text_widget.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Configure the text widget to use the scroll bar
+        self.text_widget.config(yscrollcommand=self.scrollbar.set)
+
+    def run_ping_command(self):        
         command = [
-            sys.executable,  # Path to the Python interpreter
-            '-m', 'uvicorn',
+            # sys.executable,  # Path to the Python interpreter
+            # '-m', 'uvicorn',
+            "C:\\Users\\Screwdriver\\AppData\\Local\\Programs\\Python\\Python38\\Scripts\\uvicorn.exe",
             'pytorch_solver:app',
             '--host', '192.168.0.130',  # Adjust the host and port as needed
             '--port', '8001',
         ]
-
-        self.process_run_uvicorn = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        CREATE_NEW_PROCESS_GROUP = 0x00000200  # note: could get it from subprocess
+        DETACHED_PROCESS = 0x00000008          # 0x8 | 0x200 == 0x208
+        self.ping_process = subprocess.Popen(
+            # 'ping google.com -t',
+            # *command,
+            'uvicorn pytorch_solver:app --host 192.168.0.130 --port 8001',
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
+            universal_newlines=True,
+            bufsize=1,  # Line buffering
+            # creationflags=DETACHED_PROCESS,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
         )
-        
-        self.update_label_text(f"Welcome to BumbleBee Runesolver .. \n")
-        self.update_label_text(f"Loading model .. This may take up to 10 seconds.  \n")
-        
-        async def read_stream(stream, name):
-            while True:
-                line = await stream.readline()
+
+        while not self.polling_thread.stopped():
+            try:
+                line = self.ping_process.stdout.readline()
                 if not line:
                     break
-                if self.show:
-                    # if b'conv' in line.strip():
-                    if any(x in line.strip() for x in self.blacklist):
-                        pass
-                    else:
-                        # print(f"{line.strip()}")
-                        self.update_label_text(f"{line.strip()}\n")
-                if name == 'stderr':
-                    if b'Uvicorn running' in line.strip():
-                        self.show=True
-                        self.update_label_text(f"Finished loading .. \n")
-                        self.update_label_text(f"Bumblebee Runesolver successfully launched .. \n")
-        
-        stdout_task = asyncio.create_task(read_stream(self.process_run_uvicorn.stdout, 'stdout'))
-        stderr_task = asyncio.create_task(read_stream(self.process_run_uvicorn.stderr, 'stderr'))
-        await self.process_run_uvicorn.wait()        
-        await asyncio.gather(stdout_task, stderr_task)
 
-    def run_event_loop(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()
+                if 'Uvicorn' in line:
+                    line = '\nLoading finished ..\n'
+                elif 'INFO' in line:
+                    line = '\n'
+                # Update text widget without deleting previous content
+                self.text_widget.config(state=tk.NORMAL)
+                self.text_widget.insert(tk.END, line)
+                self.text_widget.config(state=tk.DISABLED)
+                self.text_widget.see(tk.END)  # Auto-scroll to the end
 
-async def main():
-    root = tk.Tk()
-    app = UVicornApp(root)
-    threading.Thread(target=app.run_event_loop, daemon=True).start()
-    root.mainloop()
+                # Print to the console
+                # print(line, end='')
+            except msvcrt.Kernel32Error:
+                # Ignore errors when there's no data to read
+                print(f'Kernel32Error?')
+                pass
+            finally:
+                # print(f'finally polling_thread stopped?')
+                pass
+
+        self.ping_process.terminate()  # Terminate the ping process
+
+    def check_for_output(self):
+        while not self.queue.empty():
+            message = self.queue.get()
+            if message == "Stop":
+                self.polling_thread.stop()
+
+        if self.is_ping_running and not self.polling_thread.is_alive():
+            self.queue.put("Stop")  # Send a message to the thread to stop
+            self.polling_thread.join()  # Wait for the thread to finish
+            self.is_ping_running = False
+            self.toggle_button.config(text="Start", bg="#8aff8a")  # Light green
+
+        self.root.after(100, self.check_for_output)
+
+    def toggle_ping(self):
+        if not self.is_ping_running:
+            self.is_ping_running = True
+            self.polling_thread = PollingThread(target=self.run_ping_command)
+            self.polling_thread.start()
+            self.toggle_button.config(text="Stop", bg="#ff8a8a")  # Light red
+        else:
+            self.is_ping_running = False
+            self.queue.put("Stop")  # Send a message to the thread to stop
+            self.toggle_button.config(state=tk.DISABLED, text="Stopped", bg="grey")
+            self.text_widget.config(state=tk.NORMAL)
+            self.text_widget.insert(tk.END, '\nProcess is terminated. Please restart to use again. Thank you. ')
+            self.text_widget.config(state=tk.DISABLED)
+            self.text_widget.see(tk.END)  # Auto-scroll to the end
+            # self.polling_thread.stop()  # Wait for the thread to finish            
+            # self.ping_process.send_signal(signal.CTRL_C_EVENT)
+            parent = psutil.Process(self.ping_process.pid)
+            for child in parent.children(recursive=True):
+                child.terminate()
+            parent.terminate()
+            # self.ping_process.terminate()
+            # self.ping_process.kill()
+            # self.toggle_button.config(text="Start", bg="#8aff8a")  # Light green
+            # self.root.after(100, lambda: self.toggle_button.config(state=tk.NORMAL,text="Start", bg="#8aff8a"))  # Re-enable after 100ms            
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    root = tk.Tk()
+    app = PingApp(root)
+    root.after(100, app.check_for_output)  # Start the periodic check for new output
+    root.mainloop()

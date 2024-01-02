@@ -3,6 +3,6 @@
 __pycache__/
 yolov4-mish-416_last.weights
 __pycache__/pytorch_solver.cpython-38.pyc
-build\*
-dist\*
+build/
+dist/
 main.spec

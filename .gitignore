@@ -6,3 +6,4 @@ __pycache__/pytorch_solver.cpython-38.pyc
 build/
 dist/
 main.spec
+predictions.jpg

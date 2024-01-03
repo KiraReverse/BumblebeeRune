@@ -46,6 +46,8 @@ class PingApp:
 
         # Configure the text widget to use the scroll bar
         self.text_widget.config(yscrollcommand=self.scrollbar.set)
+        
+        self.root.protocol("WM_DELETE_WINDOW", self.execute_on_exit)
 
     def run_ping_command(self):        
         command = [
@@ -61,7 +63,8 @@ class PingApp:
         self.ping_process = subprocess.Popen(
             # 'ping google.com -t',
             # *command,
-            'uvicorn pytorch_solver:app --host 192.168.0.130 --port 8001',
+            # 'uvicorn pytorch_solver:app --host 192.168.0.130 --port 8001',
+            'uvicorn pytorch_solver:app --host 127.0.0.1 --port 8001',
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -137,7 +140,14 @@ class PingApp:
             # self.ping_process.terminate()
             # self.ping_process.kill()
             # self.toggle_button.config(text="Start", bg="#8aff8a")  # Light green
-            # self.root.after(100, lambda: self.toggle_button.config(state=tk.NORMAL,text="Start", bg="#8aff8a"))  # Re-enable after 100ms            
+            # self.root.after(100, lambda: self.toggle_button.config(state=tk.NORMAL,text="Start", bg="#8aff8a"))  # Re-enable after 100ms
+
+    def execute_on_exit(self):
+        parent = psutil.Process(self.ping_process.pid)
+        for child in parent.children(recursive=True):
+            child.terminate()
+        parent.terminate()        
+        self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -1,2 +1,2 @@
 # Description:
-- this is a runesolver for MapleStorySEA bot - Bumblebee (https://github.com/agumonlyt/Bumblebee)
+- checkout the bot here - Bumblebee (https://github.com/agumonlyt/Bumblebee)

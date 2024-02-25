@@ -22,7 +22,7 @@ class PollingThread(threading.Thread):
 class PingApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Bumblebee Runesolver")
+        self.root.title("Bumblebee Runesolver AI Model (Pytorch+yolov4)")
         
         photo=ImageTk.PhotoImage(file='icon.ico')
         root.iconphoto(False,photo)
@@ -46,6 +46,8 @@ class PingApp:
 
         # Configure the text widget to use the scroll bar
         self.text_widget.config(yscrollcommand=self.scrollbar.set)
+
+        self.terminated=False
         
         self.root.protocol("WM_DELETE_WINDOW", self.execute_on_exit)
 
@@ -119,6 +121,8 @@ class PingApp:
 
     def toggle_ping(self):
         if not self.is_ping_running:
+            self.text_widget.config(state=tk.NORMAL)
+            self.text_widget.insert(tk.END, '\nProcess is launching. Please wait .. ')
             self.is_ping_running = True
             self.polling_thread = PollingThread(target=self.run_ping_command)
             self.polling_thread.start()
@@ -137,17 +141,32 @@ class PingApp:
             for child in parent.children(recursive=True):
                 child.terminate()
             parent.terminate()
+            self.terminated=True
             # self.ping_process.terminate()
             # self.ping_process.kill()
             # self.toggle_button.config(text="Start", bg="#8aff8a")  # Light green
             # self.root.after(100, lambda: self.toggle_button.config(state=tk.NORMAL,text="Start", bg="#8aff8a"))  # Re-enable after 100ms
 
     def execute_on_exit(self):
-        parent = psutil.Process(self.ping_process.pid)
-        for child in parent.children(recursive=True):
-            child.terminate()
-        parent.terminate()        
-        self.root.destroy()
+        try:
+            if not self.terminated:
+                parent = psutil.Process(self.ping_process.pid)
+                for child in parent.children(recursive=True):
+                    child.terminate()
+                parent.terminate()
+        finally:
+            self.root.destroy()
+
+        # try:
+        #     parent = psutil.Process(self.ping_process.pid)
+        #     for child in parent.children(recursive=True):
+        #         child.terminate()
+        #     parent.terminate()
+        #     self.root.destroy()
+        # except:
+        #     print(f'no pid. ')
+        #     parent.terminate()
+        #     self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -19,6 +19,7 @@ from typing import Optional, List
 import cv2
 import datetime
 # import sys
+from time import perf_counter
 # import time
 # from PIL import Image, ImageDraw
 # from models.tiny_yolo import TinyYoloNet
@@ -110,44 +111,45 @@ async def read_root():
 
 @app.post('/predict')
 def predict(data: Arrow):
+    now=perf_counter()
     global m
     global class_names
     img = np.array(data.image)
     img = img.reshape((228,576,3)).astype('uint8')
     # print(img)
-    print(img.shape)
-    print(len(img))
-    print(type(img))
-    print(type(img[0][0][0]), 'aaaaaaaaaaaa')
+    # print(img.shape)
+    # print(len(img))
+    # print(type(img))
+    # print(type(img[0][0][0]), 'aaaaaaaaaaaa')
     # print(img)
 
-    save_img0 = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    date_stamp = str(datetime.datetime.now()).split('.')[0]
-    date_stamp = date_stamp.replace(" ", "_").replace(":", "_").replace("-", "_")
-    file_name = date_stamp + ".jpg"
+    # save_img0 = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    # date_stamp = str(datetime.datetime.now()).split('.')[0]
+    # date_stamp = date_stamp.replace(" ", "_").replace(":", "_").replace("-", "_")
+    # file_name = date_stamp + ".jpg"
     # cv2.imwrite('detectpytorch/'+file_name, save_img0)
 
     sized = cv2.resize(img, (416, 416))
-    print(img.shape)
+    # print(img.shape)
     for i in range(2):
         start = time.time()
         boxes = do_detect(m, sized, 0.4, 0.6, use_cuda)
         finish = time.time()
-        if i == 1:
-            print('Predicted in %f seconds.' % ((finish - start)))
+        # if i == 1:
+        #     print('Predicted in %f seconds.' % ((finish - start)))
 
-    if len(boxes[0]) != 0:
-        print(f'boxes: {boxes}')
-        print(f'boxes2: {boxes[0]}')
-        print(f'boxes3: {boxes[0][0]}')
-        print(f'boxes4: {boxes[0][0][0]}')
-    else:
-        print(f'no detection')
-        return {'prediction': 'u'}
+    # if len(boxes[0]) != 0:
+    #     print(f'boxes: {boxes}')
+    #     print(f'boxes2: {boxes[0]}')
+    #     print(f'boxes3: {boxes[0][0]}')
+    #     print(f'boxes4: {boxes[0][0][0]}')
+    # else:
+    #     print(f'no detection')
+    #     return {'prediction': 'u'}
     xd = {}
     # f = open(f'detectpytorchtxt/{date_stamp}.txt', 'a')
     for b in boxes[0]:
-        print(f'x: {b[0]} c: {b[6]}')
+        # print(f'x: {b[0]} c: {b[6]}')
         xd[b[0]] = b[6]
         x1 = b[0] * 576.0
         y1 = b[1] * 228.0
@@ -165,12 +167,12 @@ def predict(data: Arrow):
         # h = b[3]/228.0
         # f.write(f'{b[6]} {x} {y} {w} {h}\n') # this
         # f.write(f'{b[6]} {b[0]} {b[1]} {b[2]} {b[3]}\n')
-    print(f'saved detectpytorchtxt/{date_stamp}.txt')
+    # print(f'saved detectpytorchtxt/{date_stamp}.txt')
     # f.close()
     sortdict = OrderedDict(sorted(xd.items(), key=lambda x: x[0]))
     alphabets = ''
     for s in sortdict:
-        print(s, sortdict[s])
+        # print(s, sortdict[s])
         if sortdict[s] == 0:
             alphabets += 'u'
         if sortdict[s] == 1:
@@ -180,8 +182,8 @@ def predict(data: Arrow):
         if sortdict[s] == 3:
             alphabets += 'r'
 
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    plot_boxes_cv2(img, boxes[0], savename='predictions.jpg', class_names=class_names)
+    # img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    # plot_boxes_cv2(img, boxes[0], savename='predictions.jpg', class_names=class_names)
   
 #   # img = cv2.resize(img, dsize=(640, 640), interpolation=cv2.INTER_CUBIC)
 #   img = img / 255.
@@ -215,6 +217,7 @@ def predict(data: Arrow):
 #       print(cropped_image[i][1])
 #   file_name = alphabets + date_stamp + ".jpg"
 #   cv2.imwrite('detect/'+file_name, save_img0)
+    print(f'{perf_counter()-now=}')
     return {'prediction': alphabets}
 
 @app.post('/sayhi')

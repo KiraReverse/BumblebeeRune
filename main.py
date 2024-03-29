@@ -122,7 +122,7 @@ class PingApp:
     def toggle_ping(self):
         if not self.is_ping_running:
             self.text_widget.config(state=tk.NORMAL)
-            self.text_widget.insert(tk.END, '\Rune Solver Model is launching. Please wait .. ')
+            self.text_widget.insert(tk.END, 'Rune Solver Model is launching. Please wait .. ')
             self.is_ping_running = True
             self.polling_thread = PollingThread(target=self.run_ping_command)
             self.polling_thread.start()

@@ -80,6 +80,7 @@ class PingApp:
         while not self.polling_thread.stopped():
             try:
                 line = self.ping_process.stdout.readline()
+                print(f'{line}', end='')
                 if not line:
                     break
 

@@ -2,3 +2,5 @@ psutil
 uvicorn
 fastapi
 opencv-python
+pillow
+Pillow

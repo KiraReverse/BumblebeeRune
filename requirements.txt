@@ -4,3 +4,4 @@ fastapi
 opencv-python
 pillow
 Pillow
+requests
